@@ -12,8 +12,8 @@ pub type NodePtr<T> = Option<Rc<RefCell<Node<T>>>>;
 
 pub struct Node<T: Clone> {
     pub data: T,
-    pub next: NodePtr<T>,
-    pub prev: NodePtr<T>,
+    next: NodePtr<T>,
+    prev: NodePtr<T>,
 }
 
 impl<T: Clone> Node<T> {
@@ -227,7 +227,8 @@ impl<T: Clone + Debug> Debug for LinkedList<T> {
 impl<T: Clone> Clone for LinkedList<T> {
     fn clone(&self) -> Self {
         let mut list = Self::new();
-        self.iter().for_each(|item| list.push_tail(item));
+        self.iter()
+            .for_each(|item| list.push_tail(item.borrow().data.clone()));
         list
     }
 }
@@ -241,14 +242,11 @@ pub struct IntoIter<T: Clone> {
 }
 
 impl<T: Clone> Iterator for Iter<T> {
-    type Item = T;
+    type Item = Rc<RefCell<Node<T>>>;
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(node) = self.current.clone() {
-            self.current = node.borrow().next.clone();
-            Some(node.borrow().data.clone())
-        } else {
-            None
-        }
+        let ptr = self.current.clone();
+        self.current = ptr.as_ref()?.borrow().next.clone();
+        Some(ptr?)
     }
 }
 

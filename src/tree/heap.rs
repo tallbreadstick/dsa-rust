@@ -1,15 +1,14 @@
 use std::{cmp::Ordering, fmt::Debug};
 
-fn left(i: usize) -> usize { 2 * i }
-fn right(i: usize) -> usize { 2 * i + 1 }
-fn parent(i: usize) -> usize { i / 2 }
+fn left(i: usize) -> usize { 2 * i + 1 }
+fn right(i: usize) -> usize { 2 * i + 2 }
+fn parent(i: usize) -> usize { (i - 1) / 2 }
 
 pub struct BinaryHeap<T>
 where
     T: Clone + Ord + PartialOrd,
 {
-    heap: Vec<Option<T>>,
-    size: usize,
+    heap: Vec<T>,
     cmp: fn(&T, &T) -> Ordering,
 }
 
@@ -18,25 +17,13 @@ where
     T: Clone + Ord + PartialOrd,
 {
     pub fn new(cmp: fn(&T, &T) -> Ordering) -> Self {
-        Self {
-            heap: vec![None],
-            size: 0,
-            cmp,
-        }
+        Self { heap: Vec::new(), cmp }
     }
     pub fn min() -> Self {
-        Self {
-            heap: vec![None],
-            size: 0,
-            cmp: |a, b| a.cmp(b),
-        }
+        Self { heap: Vec::new(), cmp: |a, b| a.cmp(b) }
     }
     pub fn max() -> Self {
-        Self {
-            heap: vec![None],
-            size: 0,
-            cmp: |a, b| b.cmp(a),
-        }
+        Self { heap: Vec::new(), cmp: |a, b| b.cmp(a) }
     }
     pub fn from<I>(cmp: fn(&T, &T) -> Ordering, iter: I) -> Self
     where
@@ -53,86 +40,67 @@ where
     T: Clone + Ord + PartialOrd,
 {
     pub fn is_empty(&self) -> bool {
-        self.size == 0
+        self.heap.is_empty()
     }
     pub fn size(&self) -> usize {
-        self.size
+        self.heap.len()
     }
     pub fn offer(&mut self, data: T) {
-        self.heap.push(Some(data));
-        self.size += 1;
-        let mut i = self.size;
-        while i > 1 {
+        self.heap.push(data);
+        let mut i = self.heap.len() - 1;
+        while i > 0 {
             let p = parent(i);
-            match (&self.heap[i], &self.heap[p]) {
-                (Some(current), Some(parent)) if (self.cmp)(current, parent).is_lt() => {
-                    self.heap.swap(i, p);
-                }
-                _ => break,
+            if (self.cmp)(&self.heap[i], &self.heap[p]).is_lt() {
+                self.heap.swap(i, p);
+                i = p;
+            } else {
+                break;
             }
-            i = p;
         }
     }
     pub fn extend<I>(&mut self, iter: I)
     where
         I: IntoIterator<Item = T>,
     {
-        iter.into_iter().for_each(|item| {
+        for item in iter {
             self.offer(item);
-        });
+        }
     }
     pub fn poll(&mut self) -> Option<T> {
-        if self.size == 0 {
+        if self.heap.is_empty() {
             return None;
         }
-        let val = self.heap[1].take();
-        if self.size == 1 {
-            self.heap.pop();
-            self.size = 0;
-            return val;
-        }
-        let last = self.heap.pop().unwrap();
-        self.size -= 1;
-        self.heap[1] = last;
-        let mut i = 1;
-        loop {
-            let l = left(i);
-            if l > self.size {
-                break;
-            }
-            let r = right(i);
-            let best = if r <= self.size {
-                let left_ref = self.heap[l].as_ref().unwrap();
-                let right_ref = self.heap[r].as_ref().unwrap();
-                if (self.cmp)(left_ref, right_ref).is_le() {
-                    l
-                } else {
-                    r
+        let val = self.heap.swap_remove(0);
+        if !self.heap.is_empty() {
+            let mut i = 0;
+            loop {
+                let l = left(i);
+                if l >= self.heap.len() {
+                    break;
                 }
-            } else {
-                l
-            };
-            let child = self.heap[best].as_ref().unwrap();
-            let curr = self.heap[i].as_ref().unwrap();
-            if (self.cmp)(child, curr).is_lt() {
-                self.heap.swap(i, best);
-                i = best;
-            } else {
-                break;
+                let r = right(i);
+                let best = if r < self.heap.len() &&
+                    (self.cmp)(&self.heap[r], &self.heap[l]).is_lt()
+                {
+                    r
+                } else {
+                    l
+                };
+                if (self.cmp)(&self.heap[best], &self.heap[i]).is_lt() {
+                    self.heap.swap(i, best);
+                    i = best;
+                } else {
+                    break;
+                }
             }
         }
-        val
+        Some(val)
     }
     pub fn peek(&self) -> Option<&T> {
-        if let Some(root) = self.heap.get(1) {
-            root.as_ref()
-        } else {
-            None
-        }
+        self.heap.get(0)
     }
     pub fn clear(&mut self) {
-        self.heap.truncate(1);
-        self.size = 0;
+        self.heap.clear();
     }
     pub fn shrink_to_fit(&mut self) {
         self.heap.shrink_to_fit();
@@ -144,29 +112,16 @@ where
     T: Debug + Clone + Ord + PartialOrd,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[")?;
-        for i in 1..=self.size {
-            if let Some(item) = &self.heap[i] {
-                write!(f, "{:?}", item)?;
-                if i < self.size {
-                    write!(f, ", ")?;
-                }
-            }
-        }
-        write!(f, "]")
+        f.debug_list().entries(&self.heap).finish()
     }
 }
 
 impl<T> Clone for BinaryHeap<T>
 where
-    T: Debug + Clone + Ord + PartialOrd,
+    T: Clone + Ord + PartialOrd,
 {
     fn clone(&self) -> Self {
-        Self {
-            heap: self.heap.clone(),
-            size: self.size,
-            cmp: self.cmp,
-        }
+        Self { heap: self.heap.clone(), cmp: self.cmp }
     }
 }
 
@@ -174,7 +129,7 @@ pub struct Iter<'a, T>
 where 
     T: Clone + Ord + PartialOrd
 {
-    collection: &'a Vec<Option<T>>,
+    collection: &'a [T],
     index: usize
 }
 
@@ -193,7 +148,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(item) = self.collection.get(self.index) {
             self.index += 1;
-            item.as_ref()
+            Some(item)
         } else {
             None
         }
@@ -205,7 +160,7 @@ where
     T: Clone + Ord + PartialOrd
 {
     pub fn iter_unsorted(&'a self) -> Iter<'a, T> {
-        Iter { collection: &self.heap, index: 1 }
+        Iter { collection: &self.heap, index: 0 }
     }
 }
 
